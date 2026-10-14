@@ -143,6 +143,7 @@ import UniformTypeIdentifiers
       components.path = path
       let params = args["params"] as? [String: String] ?? [:]
       components.queryItems = params.map { URLQueryItem(name: $0.key, value: $0.value) }
+      if path.hasPrefix("/cgi-bin/") { components.queryItems?.append(URLQueryItem(name: "callback", value: "campusFlow")) }
     } else {
       result(FlutterError(code: "IOS_MANUAL_WIFI", message: "请在系统设置和学校网页完成网络认证", details: nil)); return
     }
@@ -173,4 +174,3 @@ import UniformTypeIdentifiers
   func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) { finishSave(!urls.isEmpty) }
   func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { finishSave(false) }
 }
-
