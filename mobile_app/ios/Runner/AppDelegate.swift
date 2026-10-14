@@ -54,12 +54,25 @@ import UniformTypeIdentifiers
     return nil
   }
   private func handle(_ suffix: String, _ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
-    if suffix == "ios", call.method == "connectStudent" {
+    if suffix == "ios", call.method == "connectStudent5g" {
       guard !joiningStudent else {
-        result(FlutterError(code: "NETWORK_BUSY", message: "正在连接 Student，请稍候", details: nil)); return
+        result(FlutterError(code: "NETWORK_BUSY", message: "正在连接 Student-5G，请稍候", details: nil)); return
       }
       joiningStudent = true
-      let config = NEHotspotConfiguration(ssid: "Student")
+      guard let args = call.arguments as? [String: Any],
+        let username = args["username"] as? String, !username.isEmpty,
+        let password = args["password"] as? String, !password.isEmpty else {
+        joiningStudent = false
+        result(FlutterError(code: "NETWORK_PASSWORD_MISSING", message: "请填写 Campus ID 和校园网密码", details: nil)); return
+      }
+      let eap = NEHotspotEAPSettings()
+      eap.supportedEAPTypes = [NSNumber(value: 25)] // PEAP
+      eap.username = username
+      eap.password = password
+      eap.outerIdentity = username
+      eap.isTLSClientCertificateRequired = false
+      eap.trustedServerNames = ["*.xmu.edu.my", "xmu.edu.my"]
+      let config = NEHotspotConfiguration(ssid: "Student-5G", eapSettings: eap)
       config.joinOnce = false
       NEHotspotConfigurationManager.shared.apply(config) { error in
         DispatchQueue.main.async {
@@ -68,7 +81,7 @@ import UniformTypeIdentifiers
                error.code == NEHotspotConfigurationError.alreadyAssociated.rawValue) {
             self.joiningStudent = false
             result(FlutterError(code: "IOS_WIFI_CONFIGURATION",
-              message: "无法自动连接 Student（\(error.domain)，代码 \(error.code)）。请确认系统加入提示，并检查签名是否保留热点配置权限。",
+              message: "无法自动连接 Student-5G（\(error.domain)，代码 \(error.code)）。请确认系统加入提示，并检查签名是否保留热点配置权限。",
               details: ["domain": error.domain, "code": error.code])); return
           }
           self.waitForStudent(remaining: 30, result: result)
@@ -150,7 +163,7 @@ import UniformTypeIdentifiers
       return
     }
     if suffix == "enterprise" {
-      if call.method == "preferences" { result(["mode": "student", "phase2": "MSCHAPV2"]); return }
+      if call.method == "preferences" { result(["mode": "student5g", "phase2": "MSCHAPV2"]); return }
       result(FlutterError(code: "IOS_MANUAL_WIFI", message: "请在 iPhone 设置中连接校园 Wi-Fi", details: nil)); return
     }
     guard suffix == "network" else { result(FlutterMethodNotImplemented); return }
@@ -189,14 +202,14 @@ import UniformTypeIdentifiers
   private func waitForStudent(remaining: Int, result: @escaping FlutterResult) {
     NEHotspotNetwork.fetchCurrent { network in
       DispatchQueue.main.async {
-        if network?.ssid == "Student", let ip = self.wifiIP(), ip.hasPrefix("10.") {
+        if network?.ssid == "Student-5G", let ip = self.wifiIP(), ip.hasPrefix("10.") {
           self.joiningStudent = false
-          result(["ssid": "Student", "ip": ip]); return
+          result(["ssid": "Student-5G", "ip": ip]); return
         }
         guard remaining > 0 else {
           self.joiningStudent = false
           result(FlutterError(code: "IOS_WIFI_NOT_CONFIRMED",
-            message: "系统尚未确认 Student 连接和校园 IP。请检查 Student 是否在附近，并确认签名保留热点配置及访问 Wi-Fi 信息权限；未切换账号或提交签到。",
+            message: "系统尚未确认 Student-5G 连接和校园 IP。请检查校园网密码、学校证书和网络覆盖，并确认签名保留热点配置及访问 Wi-Fi 信息权限；未提交签到。",
             details: nil)); return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {

@@ -110,16 +110,20 @@ class IosArchiveBridge implements ArchiveBridge {
   }
 }
 
-/// iOS users join Student in Settings; portal credentials switch in-app.
+/// Configure Student-5G enterprise credentials and verify school identity.
 /// The school identity must match before any attendance submission.
 class IosAttendanceProvider
     implements AttendanceProvider, CampusPreparedProvider {
   final AttendanceProvider inner;
   final CampusTransport campus;
+  final Duration identityPollInterval;
   Account? _account;
   String? _ip;
-  IosAttendanceProvider(this.inner, {CampusTransport? campus})
-    : campus = campus ?? AndroidCampusTransport();
+  IosAttendanceProvider(
+    this.inner, {
+    CampusTransport? campus,
+    this.identityPollInterval = const Duration(seconds: 1),
+  }) : campus = campus ?? AndroidCampusTransport();
   Future<void> check() async {
     final ip = await campus.bind();
     if (_ip != null && ip != _ip) {
@@ -132,7 +136,7 @@ class IosAttendanceProvider
             _account!.campusId.toUpperCase()) {
       throw const AttendanceError(
         'NETWORK_IDENTITY',
-        '请在 iPhone 设置连接 Student；校园网身份未确认，未提交签到',
+        'Student-5G 校园网账号未匹配。请在系统设置检查身份和密码，并断开重连后重试；未提交签到',
       );
     }
     _ip = ip;
@@ -141,27 +145,48 @@ class IosAttendanceProvider
   @override
   Future<void> login(Account account, void Function(Stage) progress) async {
     _account = account;
+    if (account.networkPassword.isEmpty) {
+      throw const AttendanceError('NETWORK_PASSWORD_MISSING', '请先填写校园网密码');
+    }
     progress(Stage.networkConfiguring);
     try {
       final link = await IosArchiveBridge.files
-          .invokeMapMethod<String, dynamic>('connectStudent');
-      if (link?['ssid'] != 'Student' ||
+          .invokeMapMethod<String, dynamic>('connectStudent5g', {
+            'username': account.campusId.trim(),
+            'password': account.networkPassword,
+          });
+      if (link?['ssid'] != 'Student-5G' ||
           link?['ip'] is! String ||
           !(link!['ip'] as String).startsWith('10.')) {
         throw const AttendanceError(
           'IOS_WIFI_NOT_CONFIRMED',
-          '尚未确认 Student 连接，未切换账号或提交签到',
+          '尚未确认 Student-5G 连接，未提交签到',
         );
       }
       if (await campus.bind() != link['ip']) {
         throw const AttendanceError('NETWORK_ADDRESS', '连接地址已变化，未切换账号或提交签到');
       }
     } on PlatformException catch (e) {
-      throw AttendanceError(e.code, e.message ?? '自动连接 Student 失败');
+      throw AttendanceError(e.code, e.message ?? '自动连接 Student-5G 失败');
     }
-    await CampusNetwork(campus)
-        .switchAccount(account, progress, reconnectWifi: false);
-    await check();
+    progress(Stage.networkVerifying);
+    var confirmed = 0;
+    for (var i = 0; i < 20; i++) {
+      try {
+        await check();
+        if (++confirmed >= 2) break;
+      } on AttendanceError catch (e) {
+        if (e.code != 'NETWORK_IDENTITY' || i == 19) rethrow;
+        confirmed = 0;
+      }
+      if (i == 19) {
+        throw const AttendanceError(
+          'NETWORK_IDENTITY',
+          '未连续确认 Student-5G 校园网账号，未提交签到',
+        );
+      }
+      await Future<void>.delayed(identityPollInterval);
+    }
     progress(Stage.authenticating);
     await inner.login(account, progress);
   }

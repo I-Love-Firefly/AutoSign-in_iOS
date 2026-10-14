@@ -56,7 +56,7 @@ void main() {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(
       IosArchiveBridge.files,
-      (call) async => {'ssid': 'Student-5G', 'ip': '10.72.88.93'},
+      (call) async => {'ssid': 'Student', 'ip': '10.72.88.93'},
     );
     addTearDown(
       () => messenger.setMockMethodCallHandler(IosArchiveBridge.files, null),
@@ -77,6 +77,71 @@ void main() {
       ),
     );
     expect(campus.calls, isEmpty);
+  });
+  test('Student-5G credentials preserve password case and skip Student portal mutations', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(IosArchiveBridge.files, (call) async {
+      expect(call.method, 'connectStudent5g');
+      expect(call.arguments, {
+        'username': 'EXAMPLE',
+        'password': 'Case-Sensitive-Password',
+      });
+      return {'ssid': 'Student-5G', 'ip': '10.72.88.93'};
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(IosArchiveBridge.files, null),
+    );
+    final campus = PortalFake()..user = 'EXAMPLE';
+    final provider = IosAttendanceProvider(
+      FakeProvider(),
+      campus: campus,
+      identityPollInterval: Duration.zero,
+    );
+    await provider.login(
+      const Account(
+        'Example',
+        'example',
+        'cas',
+        networkPassword: 'Case-Sensitive-Password',
+      ),
+      (_) {},
+    );
+    expect(campus.calls, ['/cgi-bin/rad_user_info', '/cgi-bin/rad_user_info']);
+    expect(campus.requests.every((p) => p['action'] == null), isTrue);
+  });
+  test('Student-5G old school identity stops before submission', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      IosArchiveBridge.files,
+      (call) async => {'ssid': 'Student-5G', 'ip': '10.72.88.93'},
+    );
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(IosArchiveBridge.files, null),
+    );
+    final campus = PortalFake();
+    final inner = FakeProvider();
+    final provider = IosAttendanceProvider(
+      inner,
+      campus: campus,
+      identityPollInterval: Duration.zero,
+    );
+    await expectLater(
+      provider.login(
+        const Account('Example', 'example', 'cas', networkPassword: 'password'),
+        (_) {},
+      ),
+      throwsA(
+        isA<AttendanceError>().having(
+          (e) => e.code,
+          'code',
+          'NETWORK_IDENTITY',
+        ),
+      ),
+    );
+    expect(inner.submissions, 0);
+    expect(campus.requests.every((p) => p['action'] == null), isTrue);
   });
   const password = 'offline-transfer-passphrase-123';
   test('iOS decrypts independent Android compatible crypto vector', () async {

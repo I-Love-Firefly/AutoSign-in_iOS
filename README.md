@@ -38,3 +38,8 @@ iOS 默认改为 Student，先在系统设置手动连接。应用复用 Student
 
 开始流程时调用 NEHotspotConfigurationManager 请求加入开放的 Student Wi-Fi，系统可能要求确认。配置结果并不直接视为连接成功；随后核验 SSID=Student 和校园 IPv4，再执行网页认证切换。加入失败或权限错误时停止，并显示系统错误域和代码。签名需保留 HotspotConfiguration 和 wifi-info 两项 entitlement（全能签的配置及最终有效权限需真机确认）。不强制断开重连，不自动修改 Student-5G 企业账号。
 
+
+## iOS 0.7.14+37：首选 Student-5G
+
+改用 NEHotspotEAPSettings 配置 PEAP（EAP 25）、当前 Campus ID（含外层身份）和校园网密码；校验服务器名称 *.xmu.edu.my / xmu.edu.my。不再使用 Student 网页注销或登录。连接后连续两次核验学校记录的手机 IP 与账号，身份不符停止。若 iOS 保留用户配置或旧会话，需要手动忽略旧网络/断开重连后重试。签名仍需 HotspotConfiguration 和 wifi-info；PEAP 参数、学校证书及实际账号更新尚待真机验证。
+
