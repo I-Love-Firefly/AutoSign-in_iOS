@@ -730,7 +730,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               Expanded(
                                 child: Text(
                                   Platform.isIOS
-                                      ? 'iPhone 首选 Student；请先手动连接，应用切换网页认证账号并核验。学校是否认可该网络需实际核验'
+                                      ? 'iPhone 首选 Student；开始时确认系统加入提示，连接后切换网页认证账号并核验。学校是否认可该网络需实际核验'
                                       : _networkMode == 'student'
                                       ? '当前使用 Student 旧版切换；该网络可能无法通过签到校验'
                                       : '签到优先使用 Student-5G；切换账号需系统确认或手动修改网络配置',

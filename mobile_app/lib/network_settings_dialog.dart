@@ -55,7 +55,7 @@ class _NetworkSettingsDialogState extends State<NetworkSettingsDialog> {
       ? AlertDialog(
           title: const Text('iPhone 校园网络'),
           content: const Text(
-            'iPhone 首选 Student。先在系统设置连接 Student，填写账号中的校园网密码，再开始流程。应用会注销当前手机的校园网会话、登录所选账号并核验身份；不会自动更改 Wi-Fi 或断开重连。若学校要求重连，请手动重连 Student 后重试。Student-5G 不支持自动切换。',
+            'iPhone 首选 Student。开始时应用请求系统加入 Student，请确认系统提示。连接和校园 IP 核验通过后，应用切换网页认证账号并核验身份。签名必须保留热点配置及访问 Wi-Fi 信息权限。不会强制断开重连；若学校要求重连，请手动操作。Student-5G 不支持自动切换。',
           ),
           actions: [
             TextButton(

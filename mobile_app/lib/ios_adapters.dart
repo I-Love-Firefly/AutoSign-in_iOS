@@ -141,6 +141,24 @@ class IosAttendanceProvider
   @override
   Future<void> login(Account account, void Function(Stage) progress) async {
     _account = account;
+    progress(Stage.networkConfiguring);
+    try {
+      final link = await IosArchiveBridge.files
+          .invokeMapMethod<String, dynamic>('connectStudent');
+      if (link?['ssid'] != 'Student' ||
+          link?['ip'] is! String ||
+          !(link!['ip'] as String).startsWith('10.')) {
+        throw const AttendanceError(
+          'IOS_WIFI_NOT_CONFIRMED',
+          '尚未确认 Student 连接，未切换账号或提交签到',
+        );
+      }
+      if (await campus.bind() != link['ip']) {
+        throw const AttendanceError('NETWORK_ADDRESS', '连接地址已变化，未切换账号或提交签到');
+      }
+    } on PlatformException catch (e) {
+      throw AttendanceError(e.code, e.message ?? '自动连接 Student 失败');
+    }
     await CampusNetwork(campus)
         .switchAccount(account, progress, reconnectWifi: false);
     await check();

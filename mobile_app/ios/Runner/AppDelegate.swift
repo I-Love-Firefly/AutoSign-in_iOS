@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import Network
+import NetworkExtension
 import Darwin
 import UniformTypeIdentifiers
 
@@ -10,6 +11,7 @@ import UniformTypeIdentifiers
   private var channels: [FlutterMethodChannel] = []
   private var pendingSave: FlutterResult?
   private var exportURL: URL?
+  private var joiningStudent = false
   private let session: URLSession = {
     let config = URLSessionConfiguration.ephemeral
     config.allowsCellularAccess = false
@@ -52,6 +54,28 @@ import UniformTypeIdentifiers
     return nil
   }
   private func handle(_ suffix: String, _ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    if suffix == "ios", call.method == "connectStudent" {
+      guard !joiningStudent else {
+        result(FlutterError(code: "NETWORK_BUSY", message: "正在连接 Student，请稍候", details: nil)); return
+      }
+      joiningStudent = true
+      let config = NEHotspotConfiguration(ssid: "Student")
+      config.joinOnce = false
+      NEHotspotConfigurationManager.shared.apply(config) { error in
+        DispatchQueue.main.async {
+          if let error = error as NSError?,
+             !(error.domain == NEHotspotConfigurationErrorDomain &&
+               error.code == NEHotspotConfigurationError.alreadyAssociated.rawValue) {
+            self.joiningStudent = false
+            result(FlutterError(code: "IOS_WIFI_CONFIGURATION",
+              message: "无法自动连接 Student（\(error.domain)，代码 \(error.code)）。请确认系统加入提示，并检查签名是否保留热点配置权限。",
+              details: ["domain": error.domain, "code": error.code])); return
+          }
+          self.waitForStudent(remaining: 30, result: result)
+        }
+      }
+      return
+    }
     if suffix == "ios", call.method == "httpClose" {
       if let args = call.arguments as? [String: Any], let id = args["session"] as? Int {
         academicSessions.removeValue(forKey: id)?.invalidateAndCancel()
@@ -161,6 +185,25 @@ import UniformTypeIdentifiers
         result(text)
       }
     }.resume()
+  }
+  private func waitForStudent(remaining: Int, result: @escaping FlutterResult) {
+    NEHotspotNetwork.fetchCurrent { network in
+      DispatchQueue.main.async {
+        if network?.ssid == "Student", let ip = self.wifiIP(), ip.hasPrefix("10.") {
+          self.joiningStudent = false
+          result(["ssid": "Student", "ip": ip]); return
+        }
+        guard remaining > 0 else {
+          self.joiningStudent = false
+          result(FlutterError(code: "IOS_WIFI_NOT_CONFIRMED",
+            message: "系统尚未确认 Student 连接和校园 IP。请检查 Student 是否在附近，并确认签名保留热点配置及访问 Wi-Fi 信息权限；未切换账号或提交签到。",
+            details: nil)); return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+          self.waitForStudent(remaining: remaining - 1, result: result)
+        }
+      }
+    }
   }
   func urlSession(_ session: URLSession, task: URLSessionTask,
     willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,

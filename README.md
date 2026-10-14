@@ -33,3 +33,8 @@ Windows 上可验证 Flutter 静态分析、业务测试和独立密码学向量
 
 iOS 默认改为 Student，先在系统设置手动连接。应用复用 Student 的网页认证协议注销当前手机会话、登录所选账号并核验；不调用 Android 的 Wi-Fi 断开重连。若校园网要求重连才能刷新绑定，需用户手动重连后重试。免费个人签名无法确认 SSID，连接网络由用户确认。Student 网页认证与真实学校签到认可情况尚未真机验证。Android 原项目保持 Student-5G。
 
+
+## iOS 0.7.13+36：系统自动加入 Student
+
+开始流程时调用 NEHotspotConfigurationManager 请求加入开放的 Student Wi-Fi，系统可能要求确认。配置结果并不直接视为连接成功；随后核验 SSID=Student 和校园 IPv4，再执行网页认证切换。加入失败或权限错误时停止，并显示系统错误域和代码。签名需保留 HotspotConfiguration 和 wifi-info 两项 entitlement（全能签的配置及最终有效权限需真机确认）。不强制断开重连，不自动修改 Student-5G 企业账号。
+

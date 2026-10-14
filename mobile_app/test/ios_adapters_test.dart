@@ -1,12 +1,83 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:attendance_assistant/domain.dart';
+
+import 'campus_network_test.dart' show PortalFake;
+import 'domain_test.dart' show FakeProvider;
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:attendance_assistant/ios_adapters.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'Wi-Fi rejection stops before portal mutations or academic login',
+    () async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(IosArchiveBridge.files, (call) async {
+        throw PlatformException(
+          code: 'IOS_WIFI_CONFIGURATION',
+          message: 'denied',
+        );
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(IosArchiveBridge.files, null),
+      );
+      final campus = PortalFake();
+      final inner = FakeProvider();
+      final provider = IosAttendanceProvider(inner, campus: campus);
+      await expectLater(
+        provider.login(
+          const Account(
+            'Example',
+            'example',
+            'cas',
+            networkPassword: 'password',
+          ),
+          (_) {},
+        ),
+        throwsA(
+          isA<AttendanceError>().having(
+            (e) => e.code,
+            'code',
+            'IOS_WIFI_CONFIGURATION',
+          ),
+        ),
+      );
+      expect(campus.calls, isEmpty);
+      expect(inner.submissions, 0);
+    },
+  );
+  test('unexpected Wi-Fi network stops before portal mutations', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      IosArchiveBridge.files,
+      (call) async => {'ssid': 'Student-5G', 'ip': '10.72.88.93'},
+    );
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(IosArchiveBridge.files, null),
+    );
+    final campus = PortalFake();
+    final provider = IosAttendanceProvider(FakeProvider(), campus: campus);
+    await expectLater(
+      provider.login(
+        const Account('Example', 'example', 'cas', networkPassword: 'password'),
+        (_) {},
+      ),
+      throwsA(
+        isA<AttendanceError>().having(
+          (e) => e.code,
+          'code',
+          'IOS_WIFI_NOT_CONFIRMED',
+        ),
+      ),
+    );
+    expect(campus.calls, isEmpty);
+  });
   const password = 'offline-transfer-passphrase-123';
   test('iOS decrypts independent Android compatible crypto vector', () async {
     final bridge = IosArchiveBridge();
