@@ -1,0 +1,12 @@
+mobile_app/.dart_tool/
+mobile_app/build/
+mobile_app/.idea/
+mobile_app/ios/Flutter/ephemeral/
+mobile_app/ios/Flutter/Generated.xcconfig
+mobile_app/ios/Flutter/flutter_export_environment.sh
+mobile_app/ios/Runner/GeneratedPluginRegistrant.*
+*.ipa
+*.p12
+*.mobileprovision
+*.xmumaccounts
+.env*

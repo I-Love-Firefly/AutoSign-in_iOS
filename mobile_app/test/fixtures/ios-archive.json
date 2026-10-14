@@ -1,0 +1,1 @@
+{"version":1,"cipher":"AES-256-GCM","format":"xmum-attendance-accounts-encrypted","salt":"AAECAwQFBgcICQoLDA0ODw==","data":"YCb5By71hMbYy4sFefkcv6bc/yYaJ2EPDpSFhIjoq10xabE/6Ntqo8IYbIGdbq73VpA=","iterations":310000,"kdf":"PBKDF2-HMAC-SHA256","nonce":"EBESExQVFhcYGRob"}

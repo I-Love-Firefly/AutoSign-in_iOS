@@ -1,0 +1,23 @@
+name: Unsigned iOS IPA
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Compile and package unsigned IPA
+        run: bash scripts/build-unsigned-ipa.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AutoSign-in-unsigned-IPA
+          path: mobile_app/build/ios/ipa/*.ipa
+          if-no-files-found: error
