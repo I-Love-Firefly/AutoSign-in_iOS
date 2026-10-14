@@ -111,40 +111,25 @@ class IosArchiveBridge implements ArchiveBridge {
 }
 
 /// Configure Student-5G enterprise credentials and verify school identity.
-/// The school identity must match before any attendance submission.
+/// Network address stability is checked; portal account matching is not required.
 class IosAttendanceProvider
     implements AttendanceProvider, CampusPreparedProvider {
   final AttendanceProvider inner;
   final CampusTransport campus;
-  final Duration identityPollInterval;
-  Account? _account;
+
   String? _ip;
-  IosAttendanceProvider(
-    this.inner, {
-    CampusTransport? campus,
-    this.identityPollInterval = const Duration(seconds: 1),
-  }) : campus = campus ?? AndroidCampusTransport();
+  IosAttendanceProvider(this.inner, {CampusTransport? campus})
+    : campus = campus ?? AndroidCampusTransport();
   Future<void> check() async {
     final ip = await campus.bind();
     if (_ip != null && ip != _ip) {
       throw const AttendanceError('NETWORK_ADDRESS', 'Wi-Fi 地址已变化，请重新开始');
-    }
-    final status = await campus.get('/cgi-bin/rad_user_info', {'ip': ip});
-    if (status['error'] != 'ok' ||
-        (status['online_ip'] ?? status['client_ip']) != ip ||
-        '${status['user_name']}'.toUpperCase() !=
-            _account!.campusId.toUpperCase()) {
-      throw const AttendanceError(
-        'NETWORK_IDENTITY',
-        'Student-5G 校园网账号未匹配。请在系统设置检查身份和密码，并断开重连后重试；未提交签到',
-      );
     }
     _ip = ip;
   }
 
   @override
   Future<void> login(Account account, void Function(Stage) progress) async {
-    _account = account;
     if (account.networkPassword.isEmpty) {
       throw const AttendanceError('NETWORK_PASSWORD_MISSING', '请先填写校园网密码');
     }
@@ -170,23 +155,7 @@ class IosAttendanceProvider
       throw AttendanceError(e.code, e.message ?? '自动连接 Student-5G 失败');
     }
     progress(Stage.networkVerifying);
-    var confirmed = 0;
-    for (var i = 0; i < 20; i++) {
-      try {
-        await check();
-        if (++confirmed >= 2) break;
-      } on AttendanceError catch (e) {
-        if (e.code != 'NETWORK_IDENTITY' || i == 19) rethrow;
-        confirmed = 0;
-      }
-      if (i == 19) {
-        throw const AttendanceError(
-          'NETWORK_IDENTITY',
-          '未连续确认 Student-5G 校园网账号，未提交签到',
-        );
-      }
-      await Future<void>.delayed(identityPollInterval);
-    }
+    await check();
     progress(Stage.authenticating);
     await inner.login(account, progress);
   }
