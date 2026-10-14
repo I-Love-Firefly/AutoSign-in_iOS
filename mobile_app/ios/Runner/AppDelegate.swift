@@ -126,20 +126,20 @@ import UniformTypeIdentifiers
       return
     }
     if suffix == "enterprise" {
-      if call.method == "preferences" { result(["mode": "manualios", "phase2": "MSCHAPV2"]); return }
+      if call.method == "preferences" { result(["mode": "student", "phase2": "MSCHAPV2"]); return }
       result(FlutterError(code: "IOS_MANUAL_WIFI", message: "请在 iPhone 设置中连接校园 Wi-Fi", details: nil)); return
     }
     guard suffix == "network" else { result(FlutterMethodNotImplemented); return }
     if call.method == "release" { result(nil); return }
     guard let ip = wifiIP(), ip.hasPrefix("10.") else {
-      result(FlutterError(code: "NETWORK_WIFI", message: "请先连接校园 Wi-Fi（需要 10.x 地址）", details: nil)); return
+      result(FlutterError(code: "NETWORK_WIFI", message: "请先在系统设置连接 Student（需要 10.x 地址）", details: nil)); return
     }
     if call.method == "bind" || call.method == "activate" { result(call.method == "bind" ? ip : nil); return }
     var components = URLComponents(string: "https://srun.xmu.edu.my")!
     if call.method == "portal" { components.path = "/srun_portal_phone" }
     else if call.method == "get", let args = call.arguments as? [String: Any],
       let path = args["path"] as? String,
-      ["/cgi-bin/rad_user_info", "/v1/srun_portal_online"].contains(path) {
+      ["/cgi-bin/rad_user_info", "/cgi-bin/rad_user_dm", "/cgi-bin/srun_portal", "/cgi-bin/get_challenge", "/v1/srun_portal_online"].contains(path) {
       components.path = path
       let params = args["params"] as? [String: String] ?? [:]
       components.queryItems = params.map { URLQueryItem(name: $0.key, value: $0.value) }

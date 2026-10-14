@@ -141,6 +141,20 @@ void main() {
     'cas-secret',
     networkPassword: 'password',
   );
+  test('iOS Student portal switches verified identity without native Wi-Fi reconnect', () async {
+    final t = PortalFake();
+    final stages = <Stage>[];
+    await CampusNetwork(
+      t,
+      pollInterval: Duration.zero,
+    ).switchAccount(account, stages.add, reconnectWifi: false);
+    expect(t.calls, isNot(contains('reconnect')));
+    expect(stages, isNot(contains(Stage.networkReconnect)));
+    expect(t.user, account.campusId);
+    expect(t.requests.where((p) => p['action'] == 'logout'), hasLength(1));
+    expect(t.requests.where((p) => p['action'] == 'login'), hasLength(1));
+  });
+
   test(
     'A to B unbind and AC logout both use actual A, including its domain',
     () async {

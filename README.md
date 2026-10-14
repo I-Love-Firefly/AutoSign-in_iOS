@@ -28,3 +28,8 @@ Windows 上可验证 Flutter 静态分析、业务测试和独立密码学向量
 
 2026-10-14 已通过 GitHub Actions 的 macOS/Xcode 编译并下载未签名 ARM64 IPA，保存在本地 artifacts/AutoSign-in-unsigned.ipa。构建记录：https://github.com/I-Love-Firefly/AutoSign-in_iOS/actions/runs/38514606967 。该产物尚未签名，未进行 iPhone 实测。
 
+
+## iOS 0.7.12+35：首选 Student
+
+iOS 默认改为 Student，先在系统设置手动连接。应用复用 Student 的网页认证协议注销当前手机会话、登录所选账号并核验；不调用 Android 的 Wi-Fi 断开重连。若校园网要求重连才能刷新绑定，需用户手动重连后重试。免费个人签名无法确认 SSID，连接网络由用户确认。Student 网页认证与真实学校签到认可情况尚未真机验证。Android 原项目保持 Student-5G。
+

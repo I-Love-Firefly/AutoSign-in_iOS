@@ -110,7 +110,7 @@ class IosArchiveBridge implements ArchiveBridge {
   }
 }
 
-/// iOS users connect and authenticate in Settings/the school portal first.
+/// iOS users join Student in Settings; portal credentials switch in-app.
 /// The school identity must match before any attendance submission.
 class IosAttendanceProvider
     implements AttendanceProvider, CampusPreparedProvider {
@@ -132,7 +132,7 @@ class IosAttendanceProvider
             _account!.campusId.toUpperCase()) {
       throw const AttendanceError(
         'NETWORK_IDENTITY',
-        '请在 iPhone 设置连接校园 Wi-Fi，并在学校认证页面登录所选账号；网络身份未确认，未提交签到',
+        '请在 iPhone 设置连接 Student；校园网身份未确认，未提交签到',
       );
     }
     _ip = ip;
@@ -141,7 +141,8 @@ class IosAttendanceProvider
   @override
   Future<void> login(Account account, void Function(Stage) progress) async {
     _account = account;
-    progress(Stage.networkVerifying);
+    await CampusNetwork(campus)
+        .switchAccount(account, progress, reconnectWifi: false);
     await check();
     progress(Stage.authenticating);
     await inner.login(account, progress);

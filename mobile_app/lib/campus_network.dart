@@ -378,8 +378,9 @@ class CampusNetwork {
 
   Future<void> switchAccount(
     Account account,
-    void Function(Stage) progress,
-  ) async {
+    void Function(Stage) progress, {
+    bool reconnectWifi = true,
+  }) async {
     progress(Stage.networkChecking);
     if (account.networkPassword.isEmpty) {
       throw const AttendanceError(
@@ -443,10 +444,10 @@ class CampusNetwork {
     if (current['error'] != 'not_online_error') {
       throw const AttendanceError('NETWORK_STATUS', '校园网状态异常，无法确认已离线');
     }
-    progress(Stage.networkReconnect);
+    if (reconnectWifi) progress(Stage.networkReconnect);
     // Native reconnect confirms only a fresh stable Wi-Fi link. Android's
     // captive-portal prompt is not proof of the school's authentication state.
-    ip = await transport.reconnect();
+    ip = reconnectWifi ? await transport.reconnect() : await transport.bind();
     current = await status(ip);
     _checkAddress(current, ip);
     if (current['error'] != 'not_online_error') {
@@ -524,8 +525,8 @@ class CampusNetwork {
       'ip': ip,
       'n': '200',
       'type': '1',
-      'os': 'Android',
-      'name': 'Android',
+      'os': Platform.isIOS ? 'iOS' : 'Android',
+      'name': Platform.isIOS ? 'iPhone' : 'Android',
       'nas_ip': config.nasIp,
       'double_stack': '0',
     });

@@ -113,7 +113,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final List<String> _events = [];
   bool _loading = true, _saving = false, _busy = false;
   String? _storageError;
-  String _networkMode = 'student5g';
+  String _networkMode = Platform.isIOS ? 'student' : 'student5g';
   late final TimetableController _timetables;
   late final AttendanceStatusController _attendance;
   bool _foreground = true;
@@ -143,7 +143,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final settings = await AndroidEnterpriseTransport().preferences();
       if (mounted) {
         setState(
-          () => _networkMode = settings['mode'] as String? ?? 'student5g',
+          () => _networkMode =
+              settings['mode'] as String? ??
+              (Platform.isIOS ? 'student' : 'student5g'),
         );
       }
     } on PlatformException catch (_) {}
@@ -727,7 +729,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  _networkMode == 'student'
+                                  Platform.isIOS
+                                      ? 'iPhone 首选 Student；请先手动连接，应用切换网页认证账号并核验。学校是否认可该网络需实际核验'
+                                      : _networkMode == 'student'
                                       ? '当前使用 Student 旧版切换；该网络可能无法通过签到校验'
                                       : '签到优先使用 Student-5G；切换账号需系统确认或手动修改网络配置',
                                   style: const TextStyle(height: 1.5),
