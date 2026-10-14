@@ -10,3 +10,6 @@ mobile_app/ios/Runner/GeneratedPluginRegistrant.*
 *.mobileprovision
 *.xmumaccounts
 .env*
+
+artifacts/
+test-results.log

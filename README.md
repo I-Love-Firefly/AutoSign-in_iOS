@@ -23,3 +23,8 @@ bash scripts/build-unsigned-ipa.sh
 ## 验证边界
 
 Windows 上可验证 Flutter 静态分析、业务测试和独立密码学向量。Swift 编译、iPhone 文件窗口、Keychain 和实际校园网络需要 macOS 构建及真机验证。生成了 Xcode 项目和构建流程不代表已经生成 IPA。
+
+## 已完成的云端构建
+
+2026-10-14 已通过 GitHub Actions 的 macOS/Xcode 编译并下载未签名 ARM64 IPA，保存在本地 artifacts/AutoSign-in-unsigned.ipa。构建记录：https://github.com/I-Love-Firefly/AutoSign-in_iOS/actions/runs/38514606967 。该产物尚未签名，未进行 iPhone 实测。
+
