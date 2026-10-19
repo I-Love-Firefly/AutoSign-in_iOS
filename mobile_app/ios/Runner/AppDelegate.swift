@@ -65,28 +65,7 @@ import UniformTypeIdentifiers
         joiningStudent = false
         result(FlutterError(code: "NETWORK_PASSWORD_MISSING", message: "请填写 Campus ID 和校园网密码", details: nil)); return
       }
-      let eap = NEHotspotEAPSettings()
-      eap.supportedEAPTypes = [NSNumber(value: 25)] // PEAP
-      eap.username = username
-      eap.password = password
-      eap.outerIdentity = username
-      eap.isTLSClientCertificateRequired = false
-      eap.trustedServerNames = ["*.xmu.edu.my", "xmu.edu.my"]
-      let config = NEHotspotConfiguration(ssid: "Student-5G", eapSettings: eap)
-      config.joinOnce = false
-      NEHotspotConfigurationManager.shared.apply(config) { error in
-        DispatchQueue.main.async {
-          if let error = error as NSError?,
-             !(error.domain == NEHotspotConfigurationErrorDomain &&
-               error.code == NEHotspotConfigurationError.alreadyAssociated.rawValue) {
-            self.joiningStudent = false
-            result(FlutterError(code: "IOS_WIFI_CONFIGURATION",
-              message: "无法自动连接 Student-5G（\(error.domain)，代码 \(error.code)）。请确认系统加入提示，并检查签名是否保留热点配置权限。",
-              details: ["domain": error.domain, "code": error.code])); return
-          }
-          self.waitForStudent(remaining: 30, result: result)
-        }
-      }
+      replaceStudent5g(username: username, password: password, result: result)
       return
     }
     if suffix == "ios", call.method == "httpClose" {
@@ -198,6 +177,84 @@ import UniformTypeIdentifiers
         result(text)
       }
     }.resume()
+  }
+  // Updating an existing enterprise profile can retain its old identity.
+  // Remove only our own profile and wait for its association to end before
+  // applying a completely new identity/password pair.
+  private func replaceStudent5g(username: String, password: String, result: @escaping FlutterResult) {
+    NEHotspotConfigurationManager.shared.getConfiguredSSIDs { ssids in
+      DispatchQueue.main.async {
+        if ssids.contains("Student-5G") {
+          NEHotspotConfigurationManager.shared.removeConfiguration(forSSID: "Student-5G")
+          self.waitForStudentRemoval(username: username, password: password, remaining: 20, result: result)
+        } else {
+          NEHotspotNetwork.fetchCurrent { network in
+            DispatchQueue.main.async {
+              if network == nil && self.wifiIP() != nil {
+                self.joiningStudent = false
+                result(FlutterError(code: "IOS_WIFI_STATE_UNAVAILABLE",
+                  message: "无法读取当前 Wi-Fi，未写入新密码。请确认签名保留访问 Wi-Fi 信息权限，并先在系统设置忽略旧 Student-5G。",
+                  details: nil)); return
+              }
+              guard network?.ssid != "Student-5G" else {
+                self.joiningStudent = false
+                result(FlutterError(code: "IOS_WIFI_MANUAL_PROFILE",
+                  message: "当前 Student-5G 不是本应用管理的配置。请先到设置 → Wi-Fi → Student-5G → 忽略此网络，再返回应用重新连接，避免旧用户名与新密码混用。",
+                  details: nil)); return
+              }
+              self.applyFreshStudent5g(username: username, password: password, result: result)
+            }
+          }
+        }
+      }
+    }
+  }
+  private func waitForStudentRemoval(username: String, password: String, remaining: Int, result: @escaping FlutterResult) {
+    NEHotspotConfigurationManager.shared.getConfiguredSSIDs { ssids in
+      NEHotspotNetwork.fetchCurrent { network in
+        DispatchQueue.main.async {
+          let associationEnded = network != nil
+            ? network?.ssid != "Student-5G" : self.wifiIP() == nil
+          if !ssids.contains("Student-5G"), associationEnded {
+            self.applyFreshStudent5g(username: username, password: password, result: result)
+            return
+          }
+          guard remaining > 0 else {
+            self.joiningStudent = false
+            result(FlutterError(code: "IOS_WIFI_OLD_PROFILE",
+              message: "旧 Student-5G 配置或连接尚未清除，未写入新密码。请在系统设置忽略 Student-5G 后重试。",
+              details: nil)); return
+          }
+          DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            self.waitForStudentRemoval(username: username, password: password, remaining: remaining - 1, result: result)
+          }
+        }
+      }
+    }
+  }
+  private func applyFreshStudent5g(username: String, password: String, result: @escaping FlutterResult) {
+    let eap = NEHotspotEAPSettings()
+    eap.supportedEAPTypes = [NSNumber(value: 25)] // PEAP
+    eap.username = username
+    eap.outerIdentity = username
+    eap.password = password
+    eap.isTLSClientCertificateRequired = false
+    eap.trustedServerNames = ["*.xmu.edu.my", "xmu.edu.my"]
+    let config = NEHotspotConfiguration(ssid: "Student-5G", eapSettings: eap)
+    config.joinOnce = false
+    NEHotspotConfigurationManager.shared.apply(config) { error in
+      DispatchQueue.main.async {
+        // An existing association is no longer accepted as a successful
+        // credential replacement after requesting a fresh profile.
+        if let error = error as NSError? {
+          self.joiningStudent = false
+          result(FlutterError(code: "IOS_WIFI_CONFIGURATION",
+            message: "Student-5G 新配置未被系统确认（\(error.domain)，代码 \(error.code)）。请检查加入提示、热点权限；如有旧网络，请先忽略再试。",
+            details: ["domain": error.domain, "code": error.code])); return
+        }
+        self.waitForStudent(remaining: 30, result: result)
+      }
+    }
   }
   private func waitForStudent(remaining: Int, result: @escaping FlutterResult) {
     NEHotspotNetwork.fetchCurrent { network in

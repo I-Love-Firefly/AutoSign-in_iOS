@@ -48,3 +48,8 @@ iOS 默认改为 Student，先在系统设置手动连接。应用复用 Student
 
 不再在 iOS 连接后或提交前调用 rad_user_info 比较网络账号与所选签到账号；移除连续两次身份核验。保留 Student-5G SSID、校园 IP 和地址变化检查。学校登录、课程条件及提交后记录核验保持不变。
 
+
+## iOS 0.7.16+39：Student-5G 配置完整重建
+
+修复策略：不再直接 apply 到应用已有的企业网络配置。先查询应用管理的 SSID，移除 Student-5G，等待配置移除且旧连接离开，再以新 NEHotspotEAPSettings 同时设置 username、outerIdentity、password。清理超时、无法读取已有连接或遇到系统手动保存的当前 Student-5G 时停止，不继续写新密码。新配置遇到 alreadyAssociated 也不视作成功。首次使用请先手动忽略系统保存的 Student-5G；应用无权删除用户或其他应用的配置。保留 0.7.15 移除校园网账号一致性检查的行为。实际用户名切换需用户真机验证。
+

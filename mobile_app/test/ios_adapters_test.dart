@@ -132,6 +132,78 @@ void main() {
       expect(campus.requests, isEmpty);
     },
   );
+  for (final code in [
+    'IOS_WIFI_MANUAL_PROFILE',
+    'IOS_WIFI_OLD_PROFILE',
+    'IOS_WIFI_STATE_UNAVAILABLE',
+  ]) {
+    test(
+      'native profile replacement failure $code stops login and preserves message',
+      () async {
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        messenger.setMockMethodCallHandler(IosArchiveBridge.files, (
+          call,
+        ) async {
+          throw PlatformException(code: code, message: '请先忽略旧 Student-5G');
+        });
+        addTearDown(
+          () =>
+              messenger.setMockMethodCallHandler(IosArchiveBridge.files, null),
+        );
+        final campus = PortalFake();
+        final provider = IosAttendanceProvider(FakeProvider(), campus: campus);
+        await expectLater(
+          provider.login(
+            const Account(
+              'Example',
+              'example',
+              'cas',
+              networkPassword: 'password',
+            ),
+            (_) {},
+          ),
+          throwsA(
+            isA<AttendanceError>()
+                .having((e) => e.code, 'code', code)
+                .having((e) => e.message, 'message', '请先忽略旧 Student-5G'),
+          ),
+        );
+        expect(campus.calls, isEmpty);
+      },
+    );
+  }
+  test(
+    'switching students sends a complete new identity/password pair each time',
+    () async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final sent = <Map<dynamic, dynamic>>[];
+      messenger.setMockMethodCallHandler(IosArchiveBridge.files, (call) async {
+        expect(call.method, 'connectStudent5g');
+        sent.add(Map<dynamic, dynamic>.from(call.arguments as Map));
+        return {'ssid': 'Student-5G', 'ip': '10.72.88.93'};
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(IosArchiveBridge.files, null),
+      );
+      for (final account in [
+        const Account('A', 'dummy-a', 'cas', networkPassword: 'Password-A'),
+        const Account('B', 'dummy-b', 'cas', networkPassword: 'Password-B'),
+      ]) {
+        final provider = IosAttendanceProvider(
+          FakeProvider(),
+          campus: PortalFake(),
+        );
+        await provider.login(account, (_) {});
+        await provider.close();
+      }
+      expect(sent, [
+        {'username': 'DUMMY-A', 'password': 'Password-A'},
+        {'username': 'DUMMY-B', 'password': 'Password-B'},
+      ]);
+    },
+  );
   const password = 'offline-transfer-passphrase-123';
   test('iOS decrypts independent Android compatible crypto vector', () async {
     final bridge = IosArchiveBridge();

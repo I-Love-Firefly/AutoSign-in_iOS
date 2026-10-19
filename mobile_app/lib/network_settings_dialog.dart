@@ -55,7 +55,7 @@ class _NetworkSettingsDialogState extends State<NetworkSettingsDialog> {
       ? AlertDialog(
           title: const Text('iPhone 校园网络'),
           content: const Text(
-            'iPhone 首选 Student-5G。应用使用当前账号的 Campus ID 和校园网密码配置 PEAP 企业 Wi-Fi，请确认系统加入提示。签名须保留热点配置及访问 Wi-Fi 信息权限。连接后检查网络地址，不再比较校园网账号与所选签到账号。不使用 Student 网页切换。',
+            'iPhone 首选 Student-5G。应用使用当前账号的 Campus ID 和校园网密码配置 PEAP 企业 Wi-Fi，请确认系统加入提示。签名须保留热点配置及访问 Wi-Fi 信息权限。切换时先移除应用管理的旧配置，确认断开后同时重建用户名、外层身份和密码。首次使用或旧网络由系统保存时，请先在设置中忽略 Student-5G。连接后只检查网络地址，不比较校园网与签到账号。',
           ),
           actions: [
             TextButton(
