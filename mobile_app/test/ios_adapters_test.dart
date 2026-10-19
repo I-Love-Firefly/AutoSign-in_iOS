@@ -84,6 +84,7 @@ void main() {
     messenger.setMockMethodCallHandler(IosArchiveBridge.files, (call) async {
       expect(call.method, 'connectStudent5g');
       expect(call.arguments, {
+        'forceReconfigure': true,
         'username': 'EXAMPLE',
         'password': 'Case-Sensitive-Password',
       });
@@ -180,6 +181,7 @@ void main() {
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
       final sent = <Map<dynamic, dynamic>>[];
       messenger.setMockMethodCallHandler(IosArchiveBridge.files, (call) async {
+        if (call.method == 'releaseStudent5g') return null;
         expect(call.method, 'connectStudent5g');
         sent.add(Map<dynamic, dynamic>.from(call.arguments as Map));
         return {'ssid': 'Student-5G', 'ip': '10.72.88.93'};
@@ -199,8 +201,50 @@ void main() {
         await provider.close();
       }
       expect(sent, [
-        {'username': 'DUMMY-A', 'password': 'Password-A'},
-        {'username': 'DUMMY-B', 'password': 'Password-B'},
+        {
+          'forceReconfigure': true,
+          'username': 'DUMMY-A',
+          'password': 'Password-A',
+        },
+        {
+          'forceReconfigure': true,
+          'username': 'DUMMY-B',
+          'password': 'Password-B',
+        },
+      ]);
+    },
+  );
+  test(
+    'every run reconnects and releases its Student-5G configuration',
+    () async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final operations = <String>[];
+      messenger.setMockMethodCallHandler(IosArchiveBridge.files, (call) async {
+        operations.add(call.method);
+        if (call.method == 'releaseStudent5g') return null;
+        expect((call.arguments as Map)['forceReconfigure'], isTrue);
+        return {'ssid': 'Student-5G', 'ip': '10.72.88.93'};
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(IosArchiveBridge.files, null),
+      );
+      for (var i = 0; i < 2; i++) {
+        final provider = IosAttendanceProvider(
+          FakeProvider(),
+          campus: PortalFake(),
+        );
+        await provider.login(
+          Account('Test', 'dummy-$i', 'cas', networkPassword: 'Password-$i'),
+          (_) {},
+        );
+        await provider.close();
+      }
+      expect(operations, [
+        'connectStudent5g',
+        'releaseStudent5g',
+        'connectStudent5g',
+        'releaseStudent5g',
       ]);
     },
   );

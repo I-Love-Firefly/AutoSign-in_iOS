@@ -130,6 +130,7 @@ class IosAttendanceProvider
 
   @override
   Future<void> login(Account account, void Function(Stage) progress) async {
+    _ip = null;
     if (account.networkPassword.isEmpty) {
       throw const AttendanceError('NETWORK_PASSWORD_MISSING', '请先填写校园网密码');
     }
@@ -137,6 +138,7 @@ class IosAttendanceProvider
     try {
       final link = await IosArchiveBridge.files
           .invokeMapMethod<String, dynamic>('connectStudent5g', {
+            'forceReconfigure': true,
             'username': account.campusId.trim(),
             'password': account.networkPassword,
           });
@@ -175,7 +177,12 @@ class IosAttendanceProvider
     try {
       await inner.close();
     } finally {
-      await campus.release();
+      try {
+        await campus.release();
+      } finally {
+        _ip = null;
+        await IosArchiveBridge.files.invokeMethod<void>('releaseStudent5g');
+      }
     }
   }
 }

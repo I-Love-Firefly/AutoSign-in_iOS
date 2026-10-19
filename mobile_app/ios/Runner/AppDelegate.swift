@@ -54,12 +54,24 @@ import UniformTypeIdentifiers
     return nil
   }
   private func handle(_ suffix: String, _ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
+    if suffix == "ios", call.method == "releaseStudent5g" {
+      NEHotspotConfigurationManager.shared.getConfiguredSSIDs { ssids in
+        DispatchQueue.main.async {
+          if ssids.contains("Student-5G") {
+            NEHotspotConfigurationManager.shared.removeConfiguration(forSSID: "Student-5G")
+          }
+          result(nil)
+        }
+      }
+      return
+    }
     if suffix == "ios", call.method == "connectStudent5g" {
       guard !joiningStudent else {
         result(FlutterError(code: "NETWORK_BUSY", message: "正在连接 Student-5G，请稍候", details: nil)); return
       }
       joiningStudent = true
       guard let args = call.arguments as? [String: Any],
+        args["forceReconfigure"] as? Bool == true,
         let username = args["username"] as? String, !username.isEmpty,
         let password = args["password"] as? String, !password.isEmpty else {
         joiningStudent = false
@@ -197,10 +209,10 @@ import UniformTypeIdentifiers
                   details: nil)); return
               }
               guard network?.ssid != "Student-5G" else {
-                self.joiningStudent = false
-                result(FlutterError(code: "IOS_WIFI_MANUAL_PROFILE",
-                  message: "当前 Student-5G 不是本应用管理的配置。请先到设置 → Wi-Fi → Student-5G → 忽略此网络，再返回应用重新连接，避免旧用户名与新密码混用。",
-                  details: nil)); return
+                // A previous run may still be disconnecting after cleanup.
+                // Wait, but never merge new credentials into that association.
+                self.waitForStudentRemoval(username: username, password: password, remaining: 20, result: result)
+                return
               }
               self.applyFreshStudent5g(username: username, password: password, result: result)
             }
