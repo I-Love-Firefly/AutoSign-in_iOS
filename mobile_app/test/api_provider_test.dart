@@ -18,9 +18,11 @@ class Call {
 
 class ScriptedTransport implements SessionTransport, ConnectionResetTransport {
   int resets = 0;
+  Completer<void>? resetGate;
   @override
-  void resetConnections() {
+  Future<void> resetConnections() async {
     resets++;
+    if (resetGate != null) await resetGate!.future;
   }
 
   final calls = <Call>[];
@@ -29,6 +31,7 @@ class ScriptedTransport implements SessionTransport, ConnectionResetTransport {
   bool recordSubmission = true;
   String? rejection;
   int? syncHttpStatus;
+  int? initialHttpStatus, exchangeHttpStatus, ticketHttpStatus;
   int pendingReads = 0;
   bool omitSignedRecord = false;
   Map<String, dynamic> signedOverrides = const {};
@@ -41,6 +44,15 @@ class ScriptedTransport implements SessionTransport, ConnectionResetTransport {
   }) async {
     calls.add(Call(uri, method, body, Map.of(headers)));
     dynamic data;
+    final overriddenStatus = switch (uri.path) {
+      '/lyuapServer/login' => initialHttpStatus,
+      '/mobile/shiro-cas' => exchangeHttpStatus,
+      '/lyuapServer/v1/tickets' => ticketHttpStatus,
+      _ => null,
+    };
+    if (overriddenStatus != null) {
+      return HttpReply(overriddenStatus, '<html>server error</html>');
+    }
     if (uri.path.endsWith('/login') || uri.path.endsWith('/shiro-cas')) {
       return const HttpReply(200, '<html>ok</html>');
     }
@@ -107,6 +119,89 @@ class ScriptedTransport implements SessionTransport, ConnectionResetTransport {
 }
 
 void main() {
+  for (final status in [401, 403, 421, 500]) {
+    test(
+      'ticket exchange HTTP $status stops at exchange before identity',
+      () async {
+        final t = ScriptedTransport()..exchangeHttpStatus = status;
+        final p = ApiAttendanceProvider(transport: t);
+        final stages = <Stage>[];
+        await expectLater(
+          p.login(account, stages.add),
+          throwsA(
+            isA<AttendanceError>().having(
+              (e) => e.code,
+              'code',
+              status == 401 || status == 403
+                  ? 'AUTH_FAILED'
+                  : 'SERVER_REJECTED',
+            ),
+          ),
+        );
+        expect(stages.last, Stage.navigating);
+        expect(stages, isNot(contains(Stage.identity)));
+        expect(
+          t.calls.where((c) => c.uri.path.endsWith('/shiro-cas')).length,
+          1,
+        );
+        expect(
+          t.calls.any((c) => c.uri.path.endsWith('/tryLoginUserInfo')),
+          isFalse,
+        );
+        expect(
+          t.calls.any((c) => c.uri.path.endsWith('/updateStuAttendance')),
+          isFalse,
+        );
+        await p.close();
+      },
+    );
+  }
+  test('initial HTTP 421 stops before posting credentials', () async {
+    final t = ScriptedTransport()..initialHttpStatus = 421;
+    final p = ApiAttendanceProvider(transport: t);
+    final stages = <Stage>[];
+    await expectLater(
+      p.login(account, stages.add),
+      throwsA(
+        isA<AttendanceError>().having(
+          (e) => e.message,
+          'message',
+          contains('421'),
+        ),
+      ),
+    );
+    expect(stages, isEmpty);
+    expect(t.calls, hasLength(1));
+    await p.close();
+  });
+  test('ticket HTTP 421 HTML reports HTTP failure, not invalid JSON', () async {
+    final t = ScriptedTransport()..ticketHttpStatus = 421;
+    final p = ApiAttendanceProvider(transport: t);
+    final stages = <Stage>[];
+    await expectLater(
+      p.login(account, stages.add),
+      throwsA(
+        isA<AttendanceError>().having((e) => e.code, 'code', 'SERVER_REJECTED'),
+      ),
+    );
+    expect(stages.last, Stage.loginTicket);
+    expect(t.calls.any((c) => c.uri.path.endsWith('/shiro-cas')), isFalse);
+    expect(t.calls.where((c) => c.uri.path.endsWith('/v1/tickets')).length, 1);
+    await p.close();
+  });
+  test('route reset waits for native connections to be cancelled', () async {
+    final t = ScriptedTransport()..resetGate = Completer<void>();
+    final p = ApiAttendanceProvider(transport: t);
+    var completed = false;
+    final resetting = p.resetConnections().then((_) => completed = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(t.resets, 1);
+    expect(completed, isFalse);
+    t.resetGate!.complete();
+    await resetting;
+    expect(completed, isTrue);
+    await p.close();
+  });
   test(
     'route reset retains academic identity and does not repeat authentication',
     () async {

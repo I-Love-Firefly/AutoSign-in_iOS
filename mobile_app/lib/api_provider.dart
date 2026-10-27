@@ -39,7 +39,7 @@ abstract interface class SessionTransport {
 }
 
 abstract interface class ConnectionResetTransport {
-  void resetConnections();
+  FutureOr<void> resetConnections();
 }
 
 class IsolatedHttpSession
@@ -56,9 +56,12 @@ class IsolatedHttpSession
   final int _sessionId = _nextSession++;
   bool _closed = false;
   @override
-  void resetConnections() {
+  Future<void> resetConnections() async {
     _client.close(force: true);
     _client = HttpClient()..connectionTimeout = const Duration(seconds: 18);
+    if (Platform.isIOS) {
+      await _ios.invokeMethod<void>('httpReset', {'session': _sessionId});
+    }
   }
 
   static bool allowed(Uri uri) =>
@@ -290,7 +293,7 @@ class ApiAttendanceProvider
   @override
   Future<void> resetConnections() async {
     if (transport is ConnectionResetTransport) {
-      (transport as ConnectionResetTransport).resetConnections();
+      await (transport as ConnectionResetTransport).resetConnections();
     }
   }
 
@@ -331,7 +334,7 @@ class ApiAttendanceProvider
     return text.length > 240 ? fallback : text;
   }
 
-  Map<String, dynamic> _accepted(HttpReply response) {
+  void _requireHttpSuccess(HttpReply response) {
     if (response.status == 401 || response.status == 403) {
       throw const AttendanceError('AUTH_FAILED', '登录已失效或当前账号无权限');
     }
@@ -341,6 +344,10 @@ class ApiAttendanceProvider
         '学校服务拒绝请求（HTTP ${response.status}），请在原页面核验',
       );
     }
+  }
+
+  Map<String, dynamic> _accepted(HttpReply response) {
+    _requireHttpSuccess(response);
     final j = response.json, meta = response.json['meta'];
     if (meta is! Map ||
         (meta['statusCode']?.toString() != '200' && meta['success'] != true) ||
@@ -380,10 +387,11 @@ class ApiAttendanceProvider
   @override
   Future<void> login(Account account, void Function(Stage) progress) async {
     _secrets.add(account.password);
-    await transport.send(
+    final initial = await transport.send(
       Uri.parse('https://cas.xmu.edu.my/lyuapServer/login')
           .replace(queryParameters: {'service': service}),
     );
+    _requireHttpSuccess(initial);
     progress(Stage.loginConfig);
     final configReply = await transport.send(
       Uri.parse('https://cas.xmu.edu.my/lyuapServer/loginType'),
@@ -416,6 +424,7 @@ class ApiAttendanceProvider
         },
       ).query,
     );
+    _requireHttpSuccess(response);
     final auth = response.json;
     final nested = auth['data'];
     if (nested is Map && nested['code'] != null) {
@@ -446,9 +455,10 @@ class ApiAttendanceProvider
       _secrets.add(_tgt!);
     }
     progress(Stage.navigating);
-    await transport.send(
+    final exchange = await transport.send(
       Uri.parse(service).replace(queryParameters: {'ticket': ticket}),
     );
+    _requireHttpSuccess(exchange);
     progress(Stage.identity);
     final identity = (await _api('tryLoginUserInfo', method: 'POST'))['data'];
     if (identity is! Map ||

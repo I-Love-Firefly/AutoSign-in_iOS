@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../mobile_app"
 [[ "$(uname -s)" == Darwin ]] || { echo "macOS with Xcode is required" >&2; exit 1; }
 xcodebuild -version
+bash ../scripts/test-native-session-pool.sh
 flutter pub get
 flutter analyze
 flutter test

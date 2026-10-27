@@ -6,8 +6,8 @@ import Darwin
 import UniformTypeIdentifiers
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UIDocumentPickerDelegate, URLSessionTaskDelegate {
-  private var academicSessions: [Int: URLSession] = [:]
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UIDocumentPickerDelegate {
+  private let academicSessions = SchoolSessionPool()
   private var channels: [FlutterMethodChannel] = []
   private var pendingSave: FlutterResult?
   private var exportURL: URL?
@@ -70,7 +70,13 @@ import UniformTypeIdentifiers
     }
     if suffix == "ios", call.method == "httpClose" {
       if let args = call.arguments as? [String: Any], let id = args["session"] as? Int {
-        academicSessions.removeValue(forKey: id)?.invalidateAndCancel()
+        academicSessions.close(account: id)
+      }
+      result(nil); return
+    }
+    if suffix == "ios", call.method == "httpReset" {
+      if let args = call.arguments as? [String: Any], let id = args["session"] as? Int {
+        academicSessions.resetConnections(account: id)
       }
       result(nil); return
     }
@@ -84,21 +90,15 @@ import UniformTypeIdentifiers
         let ip = wifiIP(), ip.hasPrefix("10.") else {
         result(FlutterError(code: "NETWORK_ERROR", message: "请连接校园 Wi-Fi 后重试", details: nil)); return
       }
-      let active: URLSession
-      if let existing = academicSessions[id] { active = existing }
-      else {
-        let config = URLSessionConfiguration.ephemeral
-        config.allowsCellularAccess = false
-        config.timeoutIntervalForRequest = 25
-        active = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-        academicSessions[id] = active
+      guard let active = academicSessions.session(account: id, for: url) else {
+        result(FlutterError(code: "UNEXPECTED_REDIRECT", message: "请求地址不受支持", details: nil)); return
       }
       var request = URLRequest(url: url)
       request.httpMethod = method
       request.allowsCellularAccess = false
       request.httpBody = (args["body"] as? String)?.data(using: .utf8)
       request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
-      request.setValue("XMUMAttendanceAssistant/0.7.11 iOS", forHTTPHeaderField: "User-Agent")
+      request.setValue("XMUMAttendanceAssistant/0.7.17 iOS", forHTTPHeaderField: "User-Agent")
       for (key, value) in args["headers"] as? [String: String] ?? [:] { request.setValue(value, forHTTPHeaderField: key) }
       active.dataTask(with: request) { data, response, error in
         DispatchQueue.main.async {
@@ -275,9 +275,6 @@ import UniformTypeIdentifiers
       }
     }
   }
-  func urlSession(_ session: URLSession, task: URLSessionTask,
-    willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
-    completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
   private func finishSave(_ success: Bool) {
     pendingSave?(success)
     pendingSave = nil

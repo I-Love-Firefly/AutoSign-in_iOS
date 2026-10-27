@@ -1,10 +1,12 @@
 # AutoSign-in iOS
 
+当前修复版：**0.7.17+40**。修复 iOS 跨域复用 HTTP/2 连接导致教务登录返回 HTTP 421 的问题，详见 [HTTP421修复说明.md](HTTP421修复说明.md)。
+
 从 AutoSign-in/mobile_app 0.7.11+34 独立复制并适配。原 Android 项目不修改。
 
 已迁移：账号编辑及安全存储、课程查询、签到及记录核验、AC 课表、加密账号档案。iOS 使用 Keychain、系统文件选择器和导出窗口。加密档案沿用 PBKDF2-HMAC-SHA256（310000 次）、AES-256-GCM 和原 AAD，支持原 Android 格式。
 
-iOS 校园网络流程：先在系统设置连接 Student/Student-5G，并通过学校认证页面登录当前账号，返回应用。提交前核验手机 Wi-Fi IPv4 与学校记录的账号。不会自动修改企业 Wi-Fi 配置或执行 Android 的断开重连。学校请求使用原生 URLSession 禁止蜂窝数据；教务会话分别隔离 Cookie，并由 Dart 校验每次重定向。VPN 路由及学校实际认可情况需要真机验证。
+iOS 校园网络流程的演进见下方各版本记录。学校请求使用原生 URLSession 禁止蜂窝数据；每个逻辑账号会话按目标域名分别建立连接池，Cookie 按账号会话隔离，并由 Dart 校验每次重定向。VPN 路由及学校实际认可情况需要真机验证。
 
 ## 未签名 IPA
 
@@ -16,7 +18,7 @@ iOS 校园网络流程：先在系统设置连接 Student/Student-5G，并通过
 bash scripts/build-unsigned-ipa.sh
 ```
 
-输出：`mobile_app/build/ios/ipa/AutoSign-in-unsigned.ipa`。脚本先测试，再编译 `Runner.app` 并打包 `Payload/Runner.app`，不配置签名。未签名 IPA 供后续签名使用，不能直接安装到普通 iPhone。
+输出：`mobile_app/build/ios/ipa/AutoSign-in-unsigned.ipa`。脚本先运行原生连接池测试、Flutter 静态分析及测试，再编译 `Runner.app` 并打包 `Payload/Runner.app`，不配置签名。未签名 IPA 供后续签名使用，不能直接安装到普通 iPhone。
 
 云端：将此目录作为仓库根目录上传到 GitHub，进入 Actions → Unsigned iOS IPA → Run workflow，完成后下载 AutoSign-in-unsigned-IPA artifact。工作流只手动触发，不发布 Release、不需要 Apple 证书。Flutter 版本与当前开发 SDK 固定为 3.47.4。
 
